@@ -1,0 +1,22 @@
+DIWK – dynamic input widget kit
+===============================
+diwk aims to be a minimalistic kit for text-based
+input widgets.
+
+diwk's widgets are drawn like dmenu to the upper
+side of the display. All needed widgets can be traced
+back to these three basic widgets:
+	1. normal input text box
+	2. input text box w/o echo
+	3. radio buttons
+
+
+How to build
+------------
+  $ make
+
+
+Requirements
+------------
+You presumably need X, Xlib, a C compiler, make, ...
+on your computer.
