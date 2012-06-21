@@ -9,6 +9,11 @@
 
 const char POINTERSIZE = sizeof( int * );
 
+#define DIWK_RET_DISC 0
+#define DIWK_RET_SAVE 1
+#define DIWK_UP       2
+#define DIWK_DOWN     3
+
 Window win;
 DC *dc;
 int screen;
@@ -23,7 +28,7 @@ char listcur;
 
 char type;
 
-void diwk_init( int _lines, const char *_label );
+void diwk_init( );
 void diwk_clean( );
 void diwk_draw( );
 int diwk_kb_ipret( );
