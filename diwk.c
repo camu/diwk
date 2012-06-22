@@ -5,7 +5,9 @@
 int main( int argc, char *argv[] ) {
 	diwk_init( );
 
-	printf( "%s\n", diwk_pass_prompt( ) );
+	printf( "%s\n", diwk_text_prompt( 6 ) );
+
+//	printf( "%s\n", diwk_pass_prompt( ) );
 
 //	const char *herp[] = { "herp", "sherp", "derp" };
 //	printf( "%s\n", diwk_radio_button( herp, 3 ) );
@@ -51,13 +53,46 @@ void diwk_create_window( ) {
 }
 
 void diwk_draw( ) {
+	dc->x = 0;
+	dc->y = 0;
+	dc->w = dw;
+	dc->h = lh*lines;
+	drawrect( dc, 0, 0, dw, lh*lines, True, BG( dc, bw ) );
+
+	if( type == 0 ) {
+		dc->x = 0;
+		dc->y = 0;
+		dc->w = 0;
+		dc->h = lh;
+
+		int i, j; for( i = j = 0; i < sl; i++ ) {
+			if( string[i] == '\n' ) {
+				char tmpstr[i-j+1];
+				memcpy( tmpstr, &string[j], i-j+1 );
+				tmpstr[i-j] = 0;
+				dc->w = textw( dc, tmpstr );
+				drawtext( dc, tmpstr, col );
+				j = i+1;
+				dc->y += lh;
+			}
+		}
+		char tmpstr[i-j+1];
+		memcpy( tmpstr, &string[j], i-j+1 );
+		tmpstr[i-j] = 0;
+		dc->w = textw( dc, tmpstr );
+		drawtext( dc, tmpstr, col );
+
+		dc->x = 0; dc->y = 0;
+		drawrect( dc, textnw( dc, tmpstr, curs[0]+1 ), curs[1]*lh, 1, lh, True, FG( dc, col ) );
+//		drawrect( dc, textw( dc, tmpstr )-textw( dc, &tmpstr[curs[0]] )+textw( dc, "" ), curs[1]*lh, 1, lh, True, FG( dc, col ) );
+
+		mapdc( dc, win, dw, lh*lines );
+	}
+
 	if( type == 2 ) {
 		dc->x = 0;
 		dc->y = 0;
-		dc->h = 18;
-
-		col[ColBG] = getcolor( dc, normbg );
-		col[ColFG] = getcolor( dc, normfg );
+		dc->h = lh;
 
 		drawrect( dc, 0, 0, 4, lh*lines, True, BG( dc, bw ) );
 		drawrect( dc, 0, lh*listcur, 4, lh, True, FG( dc, col ) );
@@ -73,11 +108,98 @@ void diwk_draw( ) {
 }
 
 int diwk_kb_ipret( ) {
-	if( type == 1 ) {
+	if( type == 0 ) {
+		char buf[BUFLEN];
 		KeySym ks;
 		int len = Xutf8LookupString( xic, &e.xkey, buf, BUFLEN, &ks, NULL );
-		if( sl % 25 > STRBUFLEN-BUFLEN-1 )
-			string = realloc( string, sl+STRBUFLEN+(25-(sl%25))+1 );
+		if( sl % STRBUFLEN > STRBUFLEN-BUFLEN-1 )
+			string = realloc( string, sl+STRBUFLEN+(STRBUFLEN-(sl%STRBUFLEN))+1 );
+
+		// mod1, usually alt
+		if( e.xkey.state & Mod1Mask ) {
+			switch( ks ) {
+			case XK_Escape: return DIWK_RET_DISC;
+			}
+		}
+
+		// no mod pressed
+		int i, j, k; // maybe needed
+		switch( ks ) {
+		case XK_Escape: return DIWK_RET_SAVE;
+// CHECK NOT TO MOVE OUT OF THE TEXT BOX
+		case XK_Up:
+			if( curs[1] > 0 ) curs[1]--;
+			break;
+
+		case XK_Down:
+			curs[1]++;
+			break;
+
+		case XK_Left:
+			if( string[curs[0]-1] != '\n' ) curs[0]--;
+			else {
+				curs[1]--;
+				for( k = curs[0] = 0;; curs[0]++ ) {
+					if( string[curs[0]] == '\n' ) k++;
+					if( k == curs[1] ) break;
+				} for( curs[0] = 0; string[curs[0]] != '\n'; curs[0]++ );
+			} break;
+
+		case XK_Right:
+			if( string[curs[0]+1] != '\n' ) curs[0]++;
+			else {
+				curs[0] = 0;
+				curs[1]++;
+			} break;
+				
+		case XK_Return:
+			curs[0] = 0; curs[1]++;
+			buf[0] = '\n';
+			len = 1;
+			break;
+		case XK_BackSpace:
+			// this is very stupid when sl is HUUUUUUUUUUGE
+
+			for( i = j = k = 0; i < sl; i++ ) {
+				if( string[i] == '\n' ) k++;
+				if( k == curs[1] ) {
+					j++;
+					if( j == curs[2] ) break;
+				}
+			} // now: i is the cursor position in char *string
+printf( "%i\n", i );
+			if( i == 0 ) return DIWK_KEY_NOTHING;
+			for( j = 1; utf8hnd( string[i-j] ) == -1; j++ );
+
+			if( string[i-j] == '\n' ) {
+				curs[1]--;
+				for( k = curs[0] = 0;; curs[0]++ ) {
+					if( string[curs[0]] == '\n' ) k++;
+					if( k == curs[1] ) break;
+				} for( curs[0] = 0; string[curs[0]] != '\n'; curs[0]++ );
+			} else curs[0] -= len;
+
+			memmove( &string[i-j], &string[i], j );
+			sl -= j;
+
+			diwk_draw( );
+
+			return DIWK_KEY_NOTHING;
+		}
+
+		if( ks != XK_Return ) curs[0] += len;
+		memcpy( &string[sl], buf, BUFLEN );
+		sl += len;
+
+		diwk_draw( );
+
+}
+	if( type == 1 ) {
+		char buf[BUFLEN];
+		KeySym ks;
+		int len = Xutf8LookupString( xic, &e.xkey, buf, BUFLEN, &ks, NULL );
+		if( sl % STRBUFLEN > STRBUFLEN-BUFLEN-1 )
+			string = realloc( string, sl+STRBUFLEN+(STRBUFLEN-(sl%STRBUFLEN))+1 );
 
 		// mod1, usually alt
 		if( e.xkey.state & Mod1Mask ) {
@@ -89,16 +211,6 @@ int diwk_kb_ipret( ) {
 		// no mod pressed
 		switch( ks ) {
 		case XK_Escape: return DIWK_RET_SAVE;
-		case XK_Up:
-			if( listcur > 0 ) {
-				listcur--;
-				return DIWK_UP;
-			} return DIWK_KEY_NOTHING;
-		case XK_Down:
-			if( listcur < lines-1 ) {
-				listcur++;
-				return DIWK_DOWN;
-			} return DIWK_KEY_NOTHING;
 		}
 		memcpy( &string[sl], buf, BUFLEN );
 		sl += len;
@@ -129,6 +241,33 @@ int diwk_kb_ipret( ) {
 		}
 	}
 	return -1;
+}
+
+char *diwk_text_prompt( char _lines ) {
+	type = 0;
+	lines = (_lines>0?_lines:1);
+	diwk_create_window( );
+
+	string = malloc( STRBUFLEN*BUFLEN+1 );
+	string[0] = 0;
+	sl = 0;
+	view_up = 0;
+	curs[0] = curs[1] = 0;
+
+	diwk_draw( );
+
+	for( ;; ) {
+		XNextEvent( dc->dpy, &e );
+		switch( e.type ) {
+		case KeyPress:
+			switch( diwk_kb_ipret( ) ) {
+			case DIWK_RET_DISC:
+				return "\0";
+			case DIWK_RET_SAVE:
+				return string;
+			}
+		}
+	}
 }
 
 char *diwk_pass_prompt( ) {
@@ -201,4 +340,22 @@ char *diwk_radio_button( const char **_str, int _n ) {
 		}
 		diwk_draw( );
 	}
+}
+
+char utf8hnd( unsigned char _c ) {
+	/* -2 if _c is bad
+	   -1 if shud check prev
+	    0 if one-byte char
+	    1 if two-byte char
+	    2 if three-byte char
+	    3 if .. and so on */
+
+	if( _c < 0x80 ) return 0;
+	else if( _c < 0xc0 ) return -1;
+	else if( _c < 0xe0 ) return 1;
+	else if( _c < 0xf0 ) return 2;
+	else if( _c < 0xf8 ) return 3;
+	else if( _c < 0xfc ) return 4;
+	else if( _c < 0xfe ) return 5;
+	else return -2;
 }

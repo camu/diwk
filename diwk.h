@@ -27,9 +27,13 @@ XIC xic;
 
 char type;
 
-char buf[BUFLEN];
+//char buf[BUFLEN];
 char *string;
 unsigned long sl;
+unsigned long view_up;
+unsigned long curs[2];
+
+char *diwk_text_prompt( char _lines );
 
 char *diwk_pass_prompt( );
 
@@ -43,6 +47,7 @@ void diwk_draw( );
 int diwk_kb_ipret( );
 void diwk_create_window( );
 
+char utf8hnd( unsigned char _c );
 
 void erhnd( const char *_str ) {
 	printf( "%s\n", _str );
