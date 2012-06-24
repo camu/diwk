@@ -27,11 +27,10 @@ XIC xic;
 
 char type;
 
-//char buf[BUFLEN];
 char *string;
-unsigned long sl;
-unsigned long view_up;
-unsigned long curs[2];
+int sl;
+int view_up;
+int curs[2];
 
 char *diwk_text_prompt( char _lines );
 
@@ -46,8 +45,13 @@ void diwk_clean( );
 void diwk_draw( );
 int diwk_kb_ipret( );
 void diwk_create_window( );
+void diwk_view_add( int _n );
 
 char utf8hnd( unsigned char _c );
+int diwk_row_last_col( );
+int diwk_str_curs_pos( );
+Bool diwk_is_last_row( );
+int diwk_last_row( );
 
 void erhnd( const char *_str ) {
 	printf( "%s\n", _str );

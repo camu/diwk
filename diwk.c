@@ -53,6 +53,7 @@ void diwk_create_window( ) {
 }
 
 void diwk_draw( ) {
+
 	dc->x = 0;
 	dc->y = 0;
 	dc->w = dw;
@@ -60,20 +61,23 @@ void diwk_draw( ) {
 	drawrect( dc, 0, 0, dw, lh*lines, True, BG( dc, bw ) );
 
 	if( type == 0 ) {
-		dc->x = 0;
-		dc->y = 0;
+		if( curs[1] < view_up ) diwk_view_add( -1 );
+		if( curs[1] > view_up+lines-1 ) diwk_view_add( 1 );
+
 		dc->w = 0;
 		dc->h = lh;
 
-		int i, j; for( i = j = 0; i < sl; i++ ) {
+		int i, j, k; for( i = j = k = 0; i < sl; i++ ) {
 			if( string[i] == '\n' ) {
-				char tmpstr[i-j+1];
-				memcpy( tmpstr, &string[j], i-j+1 );
-				tmpstr[i-j] = 0;
-				dc->w = textw( dc, tmpstr );
-				drawtext( dc, tmpstr, col );
+				if( k >= view_up && k <= view_up+lines ) {
+					char tmpstr[i-j+1];
+					memcpy( tmpstr, &string[j], i-j+1 );
+					tmpstr[i-j] = 0;
+					dc->w = textw( dc, tmpstr );
+					drawtext( dc, tmpstr, col );
+					dc->y += lh;
+				} k++;
 				j = i+1;
-				dc->y += lh;
 			}
 		}
 		char tmpstr[i-j+1];
@@ -83,7 +87,7 @@ void diwk_draw( ) {
 		drawtext( dc, tmpstr, col );
 
 		dc->x = 0; dc->y = 0;
-		drawrect( dc, textnw( dc, tmpstr, curs[0]+1 ), curs[1]*lh, 1, lh, True, FG( dc, col ) );
+		drawrect( dc, textnw( dc, tmpstr, curs[0]+1 ), (curs[1]-view_up)*lh, 1, lh, True, FG( dc, col ) );
 //		drawrect( dc, textw( dc, tmpstr )-textw( dc, &tmpstr[curs[0]] )+textw( dc, "" ), curs[1]*lh, 1, lh, True, FG( dc, col ) );
 
 		mapdc( dc, win, dw, lh*lines );
@@ -122,62 +126,58 @@ int diwk_kb_ipret( ) {
 			}
 		}
 
+		// ctrl
+		if( e.xkey.state & ControlMask ) {
+			switch( ks ) {
+			case XK_p: diwk_view_add( -1 ); diwk_draw( ); return DIWK_KEY_NOTHING;
+			case XK_n: diwk_view_add( 1 ); diwk_draw( ); return DIWK_KEY_NOTHING;
+			}
+		}
+
 		// no mod pressed
-		int i, j, k; // maybe needed
+		int i, j;
 		switch( ks ) {
 		case XK_Escape: return DIWK_RET_SAVE;
-// CHECK NOT TO MOVE OUT OF THE TEXT BOX
+
 		case XK_Up:
 			if( curs[1] > 0 ) curs[1]--;
-			break;
-
+			diwk_draw( );
+			return DIWK_KEY_NOTHING;
 		case XK_Down:
-			curs[1]++;
-			break;
-
+			if( !diwk_is_last_row( ) ) curs[1]++;
+			else curs[0] = diwk_row_last_col( );
+			diwk_draw( );
+			return DIWK_KEY_NOTHING;
 		case XK_Left:
-			if( string[curs[0]-1] != '\n' ) curs[0]--;
+			if( curs[0] > 0 ) curs[0]--;
 			else {
 				curs[1]--;
-				for( k = curs[0] = 0;; curs[0]++ ) {
-					if( string[curs[0]] == '\n' ) k++;
-					if( k == curs[1] ) break;
-				} for( curs[0] = 0; string[curs[0]] != '\n'; curs[0]++ );
-			} break;
-
+				curs[0] = diwk_row_last_col( );
+			}
+			diwk_draw( );
+			return DIWK_KEY_NOTHING;
 		case XK_Right:
-			if( string[curs[0]+1] != '\n' ) curs[0]++;
-			else {
+			if( curs[0] != diwk_row_last_col( ) ) curs[0]++;
+			else if( !diwk_is_last_row( ) ) {
 				curs[0] = 0;
 				curs[1]++;
-			} break;
+			}
+			diwk_draw( );
+			return DIWK_KEY_NOTHING;
 				
 		case XK_Return:
-			curs[0] = 0; curs[1]++;
 			buf[0] = '\n';
 			len = 1;
 			break;
 		case XK_BackSpace:
-			// this is very stupid when sl is HUUUUUUUUUUGE
-
-			for( i = j = k = 0; i < sl; i++ ) {
-				if( string[i] == '\n' ) k++;
-				if( k == curs[1] ) {
-					j++;
-					if( j == curs[2] ) break;
-				}
-			} // now: i is the cursor position in char *string
-printf( "%i\n", i );
+			i = diwk_str_curs_pos( );
 			if( i == 0 ) return DIWK_KEY_NOTHING;
 			for( j = 1; utf8hnd( string[i-j] ) == -1; j++ );
 
 			if( string[i-j] == '\n' ) {
 				curs[1]--;
-				for( k = curs[0] = 0;; curs[0]++ ) {
-					if( string[curs[0]] == '\n' ) k++;
-					if( k == curs[1] ) break;
-				} for( curs[0] = 0; string[curs[0]] != '\n'; curs[0]++ );
-			} else curs[0] -= len;
+				curs[0] = diwk_row_last_col( );
+			} else curs[0] -= j;
 
 			memmove( &string[i-j], &string[i], j );
 			sl -= j;
@@ -187,9 +187,13 @@ printf( "%i\n", i );
 			return DIWK_KEY_NOTHING;
 		}
 
+		i = diwk_str_curs_pos( );
+		memmove( &string[i+len], &string[i], sl-i );
+		memcpy( &string[i], buf, len );
 		if( ks != XK_Return ) curs[0] += len;
-		memcpy( &string[sl], buf, BUFLEN );
+		else { curs[0] = 0; curs[1]++; }
 		sl += len;
+		string[sl] = 0;
 
 		diwk_draw( );
 
@@ -306,7 +310,7 @@ char *diwk_radio_button( const char **_str, int _n ) {
 
 	listcur = 0;
 	list = malloc( POINTERSIZE*_n );
-	int i; for( i = 0; i < _n; i++ ) list[i] = _str[i];
+	int i; for( i = 0; i < _n; i++ ) list[i] = (char *)_str[i];
 
 	for( i = 0; i < lines; i++ ) {
 		dc->y = i*dc->h;
@@ -342,6 +346,12 @@ char *diwk_radio_button( const char **_str, int _n ) {
 	}
 }
 
+void diwk_view_add( int _n ) {
+	view_up += _n;
+	if( view_up < 0 ) view_up -= _n;
+	else if( view_up+lines > diwk_last_row( ) ) view_up -= _n;
+}
+
 char utf8hnd( unsigned char _c ) {
 	/* -2 if _c is bad
 	   -1 if shud check prev
@@ -358,4 +368,34 @@ char utf8hnd( unsigned char _c ) {
 	else if( _c < 0xfc ) return 4;
 	else if( _c < 0xfe ) return 5;
 	else return -2;
+}
+
+int diwk_row_last_col( ) {
+	int i, j; for( i = j = 0; i < sl; i++ ) {
+		if( string[i] == '\n' ) j++;
+		if( j == curs[1] ) break;
+	}
+	for( j = i+1; j < sl; j++ )
+		if( string[j] == '\n' ) return j-i;
+	return 0;
+}
+
+int diwk_str_curs_pos( ) {
+	int i, j; for( i = j = 0; i < sl; i++ ) {
+		if( j == curs[1] ) break;
+		if( string[i] == '\n' ) j++;
+	}
+	return i+curs[0];
+}
+
+Bool diwk_is_last_row( ) {
+	int i; for( i = diwk_str_curs_pos( ); i < sl; i++ )
+		if( string[i] == '\n' ) return False;
+	return True;
+}
+
+int diwk_last_row( ) {
+	int i, j; for( i = j = 0; i < sl; i++ )
+		if( string[i] == '\n' ) j++;
+	return j+1;
 }
