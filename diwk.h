@@ -30,7 +30,7 @@ int sl;
 int view_up;
 int curs[2];
 
-char *diwk_text_prompt( char _lines );
+char *diwk_text_prompt( char _lines, Bool _echo );
 
 char *diwk_pass_prompt( );
 

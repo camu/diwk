@@ -5,12 +5,12 @@
 int main( int argc, char *argv[] ) {
 	diwk_init( );
 
-//	printf( "%s\n", diwk_text_prompt( 6 ) );
+	printf( "%s\n", diwk_text_prompt( 4, True ) );
 
-//	printf( "%s\n", diwk_pass_prompt( ) );
+//	printf( "%s\n", diwk_text_prompt( 1, False ) );
 
-	const char *herp[] = { "herp", "sherp", "derp" };
-	printf( "%s\n", diwk_radio_button( herp, 3 ) );
+//	const char *herp[] = { "herp", "sherp", "derp" };
+//	printf( "%s\n", diwk_radio_button( herp, 3 ) );
 
 	diwk_clean( );
 
@@ -31,6 +31,7 @@ void diwk_init( ) {
 }
 
 void diwk_clean( ) {
+	if( string ) free( string );
 	freedc( dc );
 }
 
@@ -204,7 +205,7 @@ int diwk_kb_ipret( ) {
 	return -1;
 }
 
-char *diwk_text_prompt( char _lines ) {
+char *diwk_text_prompt( char _lines, Bool _echo ) {
 	type = 0;
 	lines = (_lines>0?_lines:1);
 	diwk_create_window( lines );
@@ -215,24 +216,137 @@ char *diwk_text_prompt( char _lines ) {
 	view_up = 0;
 	curs[0] = curs[1] = 0;
 
-	diwk_draw( );
+	if( !_echo ) {
+		dc->x = 0; dc->y = 0;
+		dc->w = textw( dc, "passwd will not be echo'd" );
+		dc->h = lh;
+		drawtext( dc, "passwd will not be echo'd", col );
+		mapdc( dc, win, dw, lh );
+	}
 
+	char buf[BUFLEN];
+	KeySym ks;
+	int len, i, j;
 	for( ;; ) {
 		XNextEvent( dc->dpy, &e );
 		switch( e.type ) {
 		case KeyPress:
-			switch( diwk_kb_ipret( ) ) {
-			case DIWK_RET_DISC:
-				if( string ) free( string );
-				return "\0";
-			case DIWK_RET_SAVE:
-				if( string ) free( string );
-				return string;
+			len = Xutf8LookupString( xic, &e.xkey, buf, BUFLEN, &ks, NULL );
+			if( sl % STRBUFLEN > STRBUFLEN-BUFLEN-1 )
+				string = realloc( string, sl+STRBUFLEN+(STRBUFLEN-(sl%STRBUFLEN))+1 );
+
+			// mod1, usually alt
+			if( e.xkey.state & Mod1Mask ) {
+				switch( ks ) {
+				case XK_Escape: return "\0";
+				}
 			}
+
+			// ctrl
+			else if( e.xkey.state & ControlMask ) {
+				switch( ks ) {
+				case XK_p:
+					diwk_view_add( -1 );
+					break;
+				case XK_n:
+					diwk_view_add( 1 );
+					break;
+				}
+			}
+
+			// no mod pressed
+			else {
+				switch( ks ) {
+				case XK_Escape: return string;
+
+				case XK_Up:
+					if( curs[1] > 0 ) curs[1]--;
+					break;
+				case XK_Down:
+					if( !diwk_is_last_row( ) ) curs[1]++;
+					else curs[0] = diwk_row_last_col( );
+					break;
+				case XK_Left:
+					if( curs[0] > 0 ) curs[0]--;
+					else {
+						curs[1]--;
+						curs[0] = diwk_row_last_col( );
+					}
+					break;
+				case XK_Right:
+					if( curs[0] != diwk_row_last_col( ) ) curs[0]++;
+					else if( !diwk_is_last_row( ) ) {
+						curs[0] = 0;
+						curs[1]++;
+					}
+					break;
+
+				case XK_Return:
+					buf[0] = '\n';
+					len = 1;
+				default:
+					i = diwk_str_curs_pos( );
+					memmove( &string[i+len], &string[i], sl-i );
+					memcpy( &string[i], buf, len );
+					if( ks != XK_Return ) curs[0] += len;
+					else { curs[0] = 0; curs[1]++; }
+					sl += len;
+					string[sl] = 0;
+					break;
+					
+				case XK_BackSpace:
+					i = diwk_str_curs_pos( );
+					if( i == 0 ) break;
+					for( j = 1; utf8hnd( string[i-j] ) == -1; j++ );
+					if( string[i-j] == '\n' ) {
+						curs[1]--;
+						curs[0] = diwk_row_last_col( );
+					} else curs[0] -= j;
+					memmove( &string[i-j], &string[i], j );
+					sl -= j;
+					break;
+				}
+			}
+		 }
+
+		// WARNING: the following section is as ugly as your mom last night
+		if( _echo ) {
+			if( curs[1] < view_up ) diwk_view_add( -1 );
+			if( curs[1] > view_up+lines-1 ) diwk_view_add( 1 );
+
+			dc->x = dc->y = 0; dc->w = dw; dc->h = lh*lines;
+			drawrect( dc, 0, 0, dw, lh*lines, True, BG( dc, bw ) );
+
+			dc->w = 0; dc->h = lh;
+
+			int i, j, k; for( i = j = k = 0; i < sl; i++ ) {
+				if( string[i] == '\n' ) {
+					if( k >= view_up && k <= view_up+lines ) {
+						char tmpstr[i-j+1];
+						memcpy( tmpstr, &string[j], i-j+1 );
+						tmpstr[i-j] = 0;
+						dc->w = textw( dc, tmpstr );
+						drawtext( dc, tmpstr, col );
+						dc->y += lh;
+					} k++;
+					j = i+1;
+				}
+			}
+			char tmpstr[i-j+1];
+			memcpy( tmpstr, &string[j], i-j+1 );
+			tmpstr[i-j] = 0;
+			dc->w = textw( dc, tmpstr );
+			drawtext( dc, tmpstr, col );
+
+			dc->x = dc->y = 0;
+			drawrect( dc, textnw( dc, tmpstr, curs[0]+1 ), (curs[1]-view_up)*lh, 1, lh, True, FG( dc, col ) );
+
+			mapdc( dc, win, dw, lh*lines );
 		}
 	}
 }
 
+/*
 char *diwk_pass_prompt( ) {
 	type = 1;
 	lines = 1;
@@ -241,12 +355,6 @@ char *diwk_pass_prompt( ) {
 	string = malloc( STRBUFLEN*BUFLEN+1 );
 	sl = 0;
 
-	dc->x = 0;
-	dc->y = 0;
-	dc->w = textw( dc, "passwd will not be echo'd" );
-	dc->h = lh;
-	drawtext( dc, "passwd will not be echo'd", col );
-	mapdc( dc, win, dw, lh );
 
 	for( ;; ) {
 		XNextEvent( dc->dpy, &e );
@@ -263,6 +371,7 @@ char *diwk_pass_prompt( ) {
 		}
 	}
 }
+*/
 
 char *diwk_radio_button( const char **_str, int _n ) {
 	diwk_create_window( _n );
