@@ -8,14 +8,12 @@
 #include <string.h>
 
 const char POINTERSIZE = sizeof( int * );
-#define BUFLEN 4
+#define BUFLEN 6
 #define STRBUFLEN 25
 
 #define DIWK_KEY_NOTHING 0
 #define DIWK_RET_DISC    1
 #define DIWK_RET_SAVE    2
-#define DIWK_UP          3
-#define DIWK_DOWN        4
 
 Window win;
 DC *dc;
@@ -37,14 +35,12 @@ char *diwk_text_prompt( char _lines );
 char *diwk_pass_prompt( );
 
 char *diwk_radio_button( const char **_str, int _n );
-char **list;
-char listcur;
 
 void diwk_init( );
 void diwk_clean( );
 void diwk_draw( );
 int diwk_kb_ipret( );
-void diwk_create_window( );
+void diwk_create_window( char _lines );
 void diwk_view_add( int _n );
 
 char utf8hnd( unsigned char _c );

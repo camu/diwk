@@ -5,12 +5,12 @@
 int main( int argc, char *argv[] ) {
 	diwk_init( );
 
-	printf( "%s\n", diwk_text_prompt( 6 ) );
+//	printf( "%s\n", diwk_text_prompt( 6 ) );
 
 //	printf( "%s\n", diwk_pass_prompt( ) );
 
-//	const char *herp[] = { "herp", "sherp", "derp" };
-//	printf( "%s\n", diwk_radio_button( herp, 3 ) );
+	const char *herp[] = { "herp", "sherp", "derp" };
+	printf( "%s\n", diwk_radio_button( herp, 3 ) );
 
 	diwk_clean( );
 
@@ -31,19 +31,17 @@ void diwk_init( ) {
 }
 
 void diwk_clean( ) {
-	if( string ) free( string );
-	if( list ) free( list );
 	freedc( dc );
 }
 
-void diwk_create_window( ) {
+void diwk_create_window( char _lines ) {
 	XSetWindowAttributes swa;
 	swa.override_redirect = True;
 	swa.background_pixel = getcolor( dc, "#ffffff" );
 	swa.event_mask = ExposureMask | VisibilityChangeMask | KeyPressMask;
-	win = XCreateWindow( dc->dpy, RootWindow( dc->dpy, screen ), 0, 0, dw, lh*lines, 0, DefaultDepth( dc->dpy, screen ), CopyFromParent, DefaultVisual( dc->dpy, screen ), CWOverrideRedirect | CWBackPixel | CWEventMask, &swa );
+	win = XCreateWindow( dc->dpy, RootWindow( dc->dpy, screen ), 0, 0, dw, lh*_lines, 0, DefaultDepth( dc->dpy, screen ), CopyFromParent, DefaultVisual( dc->dpy, screen ), CWOverrideRedirect | CWBackPixel | CWEventMask, &swa );
 	XMapRaised( dc->dpy, win );
-	resizedc( dc, dw, lh*lines );
+	resizedc( dc, dw, lh*_lines );
 
 	if( XGrabKeyboard( dc->dpy, DefaultRootWindow( dc->dpy ), True, GrabModeAsync, GrabModeAsync, CurrentTime ) != GrabSuccess )
 		erhnd( "failed to grab kb" );
@@ -89,23 +87,6 @@ void diwk_draw( ) {
 		dc->x = 0; dc->y = 0;
 		drawrect( dc, textnw( dc, tmpstr, curs[0]+1 ), (curs[1]-view_up)*lh, 1, lh, True, FG( dc, col ) );
 //		drawrect( dc, textw( dc, tmpstr )-textw( dc, &tmpstr[curs[0]] )+textw( dc, "" ), curs[1]*lh, 1, lh, True, FG( dc, col ) );
-
-		mapdc( dc, win, dw, lh*lines );
-	}
-
-	if( type == 2 ) {
-		dc->x = 0;
-		dc->y = 0;
-		dc->h = lh;
-
-		drawrect( dc, 0, 0, 4, lh*lines, True, BG( dc, bw ) );
-		drawrect( dc, 0, lh*listcur, 4, lh, True, FG( dc, col ) );
-		int i; for( i = 0; i < lines; i++ ) {
-			dc->y = i*dc->h;
-			dc->w = textw( dc, list[i] );
-			dc->x = 4;
-			drawtext( dc, list[i], col );
-		}
 
 		mapdc( dc, win, dw, lh*lines );
 	}
@@ -219,38 +200,14 @@ int diwk_kb_ipret( ) {
 		memcpy( &string[sl], buf, BUFLEN );
 		sl += len;
 	}
-	if( type == 2 ) {
-		KeySym ks = XLookupKeysym( &(e.xkey), 0 );
 
-		// mod1, usually alt
-		if( e.xkey.state & Mod1Mask ) {
-			switch( ks ) {
-			case XK_Escape: return DIWK_RET_DISC;
-			}
-		}
-
-		// no mod pressed
-		switch( ks ) {
-		case XK_Escape: return DIWK_RET_SAVE;
-		case XK_Up:
-			if( listcur > 0 ) {
-				listcur--;
-				return DIWK_UP;
-			} break;
-		case XK_Down:
-			if( listcur < lines-1 ) {
-				listcur++;
-				return DIWK_DOWN;
-			} break;
-		}
-	}
 	return -1;
 }
 
 char *diwk_text_prompt( char _lines ) {
 	type = 0;
 	lines = (_lines>0?_lines:1);
-	diwk_create_window( );
+	diwk_create_window( lines );
 
 	string = malloc( STRBUFLEN*BUFLEN+1 );
 	string[0] = 0;
@@ -266,8 +223,10 @@ char *diwk_text_prompt( char _lines ) {
 		case KeyPress:
 			switch( diwk_kb_ipret( ) ) {
 			case DIWK_RET_DISC:
+				if( string ) free( string );
 				return "\0";
 			case DIWK_RET_SAVE:
+				if( string ) free( string );
 				return string;
 			}
 		}
@@ -277,7 +236,7 @@ char *diwk_text_prompt( char _lines ) {
 char *diwk_pass_prompt( ) {
 	type = 1;
 	lines = 1;
-	diwk_create_window( );
+	diwk_create_window( lines );
 
 	string = malloc( STRBUFLEN*BUFLEN+1 );
 	sl = 0;
@@ -295,8 +254,10 @@ char *diwk_pass_prompt( ) {
 		case KeyPress:
 			switch( diwk_kb_ipret( ) ) {
 			case DIWK_RET_DISC:
+				if( string ) free( string );
 				return "\0";
 			case DIWK_RET_SAVE:
+				if( string ) free( string );
 				return string;
 			}
 		}
@@ -304,45 +265,61 @@ char *diwk_pass_prompt( ) {
 }
 
 char *diwk_radio_button( const char **_str, int _n ) {
-	type = 2;
-	lines = _n;
-	diwk_create_window( );
+	diwk_create_window( _n );
 
-	listcur = 0;
-	list = malloc( POINTERSIZE*_n );
-	int i; for( i = 0; i < _n; i++ ) list[i] = (char *)_str[i];
+	char listcur = 0;
 
-	for( i = 0; i < lines; i++ ) {
+	dc->x = 0; dc->y = 0; dc->h = lh;
+	drawrect( dc, 0, lh*(listcur+1), 4, lh, True, BG( dc, bw ) );
+	drawrect( dc, 0, lh*listcur, 4, lh, True, FG( dc, col ) );
+	int i; for( i = 0; i < _n; i++ ) {
 		dc->y = i*dc->h;
-		dc->w = textw( dc, list[i] );
+		dc->w = textw( dc, _str[i] );
 		dc->x = 4;
-		drawtext( dc, list[i], col );
+		drawtext( dc, _str[i], col );
 	}
-	mapdc( dc, win, dw, lh*lines );
+	mapdc( dc, win, dw, lh*_n );
 
+
+	KeySym ks;
 	for( ;; ) {
 		XNextEvent( dc->dpy, &e );
 		switch( e.type ) {
 		case KeyPress:
-			switch( diwk_kb_ipret( ) ) {
-			case DIWK_RET_DISC:
-				return "\0";
-			case DIWK_RET_SAVE:
-				return list[listcur];
+			ks = XLookupKeysym( &e.xkey, 0 );
 
-			case DIWK_UP:
-				drawrect( dc, 0, lh*(listcur+1), 4, lh, True, BG( dc, bw ) );
-				drawrect( dc, 0, lh*listcur, 4, lh, True, FG( dc, col ) );
-				mapdc( dc, win, dw, lh*lines );
-				break;
-			case DIWK_DOWN:
-				drawrect( dc, 0, lh*(listcur-1), 4, lh, True, BG( dc, bw ) );
-				drawrect( dc, 0, lh*listcur, 4, lh, True, FG( dc, col ) );
-				mapdc( dc, win, dw, lh*lines );
-				break;
+			// mod1, usually alt
+			if( e.xkey.state & Mod1Mask ) {
+				switch( ks ) {
+				case XK_Escape:
+					return "\0";
+				}
+			}
+
+			// no mod pressed
+			else
+			switch( ks ) {
+			case XK_Escape:
+				return (char *)_str[listcur];
+
+			case XK_Up:
+				if( listcur > 0 ) {
+					listcur--;
+					dc->x = 0; dc->y = 0;
+					drawrect( dc, 0, lh*(listcur+1), 4, lh, True, BG( dc, bw ) );
+					drawrect( dc, 0, lh*listcur, 4, lh, True, FG( dc, col ) );
+					mapdc( dc, win, dw, lh*_n );
+				} break;
+			case XK_Down:
+				if( listcur < _n-1 ) {
+					listcur++;
+					dc->x = 0; dc->y = 0;
+					drawrect( dc, 0, lh*(listcur-1), 4, lh, True, BG( dc, bw ) );
+					drawrect( dc, 0, lh*listcur, 4, lh, True, FG( dc, col ) );
+					mapdc( dc, win, dw, lh*_n );
+				} break;
 			}
 		}
-		diwk_draw( );
 	}
 }
 
