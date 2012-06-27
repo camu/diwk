@@ -30,16 +30,12 @@ int sl;
 int view_up;
 int curs[2];
 
-char *diwk_text_prompt( char _lines, Bool _echo );
-
-char *diwk_pass_prompt( );
+char *diwk_text_prompt( char _lines );
 
 char *diwk_radio_button( const char **_str, int _n );
 
 void diwk_init( );
 void diwk_clean( );
-void diwk_draw( );
-int diwk_kb_ipret( );
 void diwk_create_window( char _lines );
 void diwk_view_add( int _n );
 
