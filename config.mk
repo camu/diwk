@@ -5,8 +5,8 @@ INCS = -I${X11INC}
 LIBS = -L${X11LIB} -lX11
 
 CPPFLAGS = -D_BSD_SOURCE -D_POSIX_C_SOURCE=2
-CFLAGS   = -std=c99 -pedantic -Wall -Os ${INCS}
-LDFLAGS  = -s ${LIBS}
+CFLAGS   = -g -std=c99 -pedantic -Wall -Os ${INCS}
+LDFLAGS  = -g -s ${LIBS}
 
 CC = cc
 

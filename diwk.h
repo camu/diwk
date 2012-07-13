@@ -26,24 +26,23 @@ XIC xic;
 char type;
 
 char *string;
+int *ls;
 int sl;
-int view_up;
-int curs[2];
+int curs;
+int view_top;
 
-char *diwk_text_prompt( char _lines );
+void updls( int _len, int _start );
+int cx( int _curs );
+int cy( int _curs );
 
+char *diwk_text_prompt( int _lines );
 char *diwk_radio_button( const char **_str, int _n );
 
 void diwk_init( );
 void diwk_clean( );
 void diwk_create_window( char _lines );
-void diwk_view_add( int _n );
 
 char utf8hnd( unsigned char _c );
-int diwk_row_last_col( );
-int diwk_str_curs_pos( );
-Bool diwk_is_last_row( );
-int diwk_last_row( );
 
 void erhnd( const char *_str ) {
 	printf( "%s\n", _str );

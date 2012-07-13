@@ -31,6 +31,7 @@ void diwk_init( ) {
 }
 
 void diwk_clean( ) {
+	if( ls ) free( ls );
 	if( string ) free( string );
 	freedc( dc );
 }
@@ -51,64 +52,64 @@ void diwk_create_window( char _lines ) {
 	xic = XCreateIC( xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, win, XNFocusWindow, win, NULL );
 }
 
-void fuckalyse( ) {
-	int i; for( i = 0; i < sl; i++ )
-		printf( "%i %c %i\n", i, string[i], utf8hnd( string[i] ) );
-	printf( "\n%i %c %i\n###\n\n", curs[0], string[curs[0]], utf8hnd( string[curs[0]] ) );
-}
+void draw( int _lines ) {
+	for( ; cy( curs ) < view_top; view_top-- );
+	for( ; cy( curs ) >= view_top+_lines; view_top++ );
 
-char *diwk_text_prompt( char _lines ) {
-	type = 0;
-	lines = (_lines>0?_lines:1);
-	diwk_create_window( lines );
-
-	string = malloc( STRBUFLEN*BUFLEN+1 );
-	string[0] = 0;
-	sl = 0;
-	view_up = 0;
-	curs[0] = curs[1] = 0;
-
-	if( _lines == 0 ) {
-		dc->x = 0; dc->y = 0;
-		dc->w = textw( dc, "passwd will not be echo'd" );
-		dc->h = lh;
-		drawtext( dc, "passwd will not be echo'd", col );
-		mapdc( dc, win, dw, lh );
-	} else {
-		// WARNING: the following section is as ugly as your mom last night
-		dc->x = dc->y = 0; dc->w = dw; dc->h = lh*lines;
-		drawrect( dc, 0, 0, dw, lh*lines, True, BG( dc, bw ) );
-
-		dc->w = 0; dc->h = lh;
-
-		int i, j, k; for( i = j = k = 0; i < sl; i++ ) {
-			if( string[i] == '\n' ) {
-				if( k >= view_up && k <= view_up+lines ) {
-					char tmpstr[i-j+1];
-					memcpy( tmpstr, &string[j], i-j+1 );
-					tmpstr[i-j] = 0;
-					dc->w = textw( dc, tmpstr );
-					drawtext( dc, tmpstr, col );
-					dc->y += lh;
-				} k++;
-				j = i+1;
+	dc->x = 0; dc->y = 0; dc->w = dw; dc->h = lh*_lines;
+	drawrect( dc, 0, 0, dw, lh*_lines, True, BG( dc, bw ) );
+	dc->w = 0; dc->h = lh;
+	int y = 0;
+	int i; for( i = 1; i < ls[0]; i++ ) {
+		if( i-1 >= view_top && i-1 < view_top+_lines ) {
+			int j = (ls[i+1]-ls[i] < 1 ? 1 : ls[i+1]-ls[i] );
+			char tmpstr[j];
+			memcpy( tmpstr, &string[ls[i]], j );
+			if( tmpstr[j-1] == '\n' ) tmpstr[j-1] = 0;
+			else tmpstr[j] = 0;
+			dc->w = textw( dc, tmpstr );
+			dc->y = y;
+			drawtext( dc, tmpstr, col );
+			y += lh;
+			dc->y = 0;
+			if( i-1 == cy( curs ) ) {
+				int k; for( k = 0; k < j; k++ ) tmpstr[k] = 'x';
+				drawrect( dc, textnw( dc, tmpstr, cx( curs )+1 ), (i-1-view_top)*lh, 1, lh, True, FG( dc, col ) );
 			}
 		}
-		char tmpstr[i-j+1];
-		memcpy( tmpstr, &string[j], i-j+1 );
-		tmpstr[i-j] = 0;
-		dc->w = textw( dc, tmpstr );
-		drawtext( dc, tmpstr, col );
-
-		dc->x = dc->y = 0;
-		drawrect( dc, textnw( dc, tmpstr, curs[0]+1 ), (curs[1]-view_up)*lh, 1, lh, True, FG( dc, col ) );
-
-		mapdc( dc, win, dw, lh*lines );
 	}
+	mapdc( dc, win, dw, lh*_lines );
+}
+
+// vaatii pientä hiomista kun hypätään kohtaan jossa ei ole mitään (mutta silti riville)
+void cvm( Bool _up ) {
+	int i = cx( curs ), j = curs;
+	for( ; curs > 0 && string[curs] != '\n'; curs-- )
+		if( utf8hnd( string[curs] ) == -1 ) i--;
+
+	if( _up ) {
+		for( curs--; curs > 0 && string[curs-1] != '\n'; curs-- );
+		for( ; cx( curs ) < i; curs++ );
+	} else {
+		curs = j;
+		for( ; string[curs] != '\n'; curs++ );
+		for( curs++; curs < sl && cx( curs ) < i; curs++ );
+	}
+}
+
+char *diwk_text_prompt( int _lines ) {
+	diwk_create_window( _lines );
+	string = malloc( STRBUFLEN*BUFLEN+1 );
+	string[0] = 0;
+	ls = malloc( 3*sizeof(int) );
+	ls[0] = 2; ls[1] = ls[2] = 0;
+	sl = curs = 0;
+
+	draw( _lines );
 
 	char buf[BUFLEN];
 	KeySym ks;
-	int len, i, j;
+	int len, i;
 	for( ;; ) {
 		XNextEvent( dc->dpy, &e );
 		switch( e.type ) {
@@ -127,11 +128,11 @@ char *diwk_text_prompt( char _lines ) {
 			// ctrl
 			else if( e.xkey.state & ControlMask ) {
 				switch( ks ) {
-				case XK_p:
-					diwk_view_add( -1 );
+				case XK_j:
+					if( view_top > 0 ) view_top--;
 					break;
-				case XK_n:
-					diwk_view_add( 1 );
+				case XK_k:
+					if( view_top+_lines < ls[0]-1 ) view_top++;
 					break;
 				}
 			}
@@ -141,103 +142,47 @@ char *diwk_text_prompt( char _lines ) {
 				switch( ks ) {
 				case XK_Return:
 					buf[0] = '\n';
-					len = 1;
+					len = 1; ls[0]++;
+					ls = realloc( ls, sizeof(int)*(ls[0]+1) );
+					ls[ls[0]] = curs;
+					ls[ls[0]-1]++;
 				default:
-					i = diwk_str_curs_pos( );
-					memmove( &string[i+len], &string[i], sl-i );
-					memcpy( &string[i], buf, len );
-					if( ks != XK_Return ) curs[0] += len;
-					else { curs[0] = 0; curs[1]++; }
-					sl += len;
+					memmove( &string[curs+len], &string[curs], sl-curs );
+					memcpy( &string[curs], buf, len );
+					sl += len; curs += len;
+					updls( len, cy( curs )+1 );
 					string[sl] = 0;
-					break;
-
-				case XK_Escape: return string;
-
-				case XK_Up:
-// PÄIVITÄ CURS[0] MERKKIEN PITUUDEN MUKAAN!!!!
-					if( curs[1] > 0 ) curs[1]--;
-					break;
-				case XK_Down:
-					if( !diwk_is_last_row( ) ) curs[1]++;
-					else curs[0] = diwk_row_last_col( );
-					break;
-				case XK_Left:
-// MUUTA CURS[0] MERKKEIN PITUUDEN MUKAAN!!!!
-					if( curs[0] == 0 && curs[1] == 0 ) break;
-//					for( i = 1; utf8hnd( string[curs[0]-i] ) == -1; i++ );
-//printf( "%i\n", i );
-//fuckalyse( );
-					if( curs[0] > 0 ) curs[0]--;
-					else {
-						curs[1]--;
-						curs[0] = diwk_row_last_col( );
-					}
-					break;
-				case XK_Right:
-//					for( i = 0; utf8hnd( string[curs[0]+i] ) == -1; i++ ); i++;
-//fuckalyse( );
-					if( curs[0] < diwk_row_last_col( ) ) curs[0]++;
-					else if( !diwk_is_last_row( ) ) {
-						curs[0] = 0;
-						curs[1]++;
-					}
 					break;
 
 				case XK_BackSpace:
-					i = diwk_str_curs_pos( );
-					if( i == 0 ) break;
-					for( j = 1; utf8hnd( string[i-j] ) == -1; j++ );
-					if( string[i-1] == '\n' ) {
-						curs[1]--;
-						curs[0] = diwk_row_last_col( );
-					} else curs[0] -= j;
-					memmove( &string[i-j], &string[i], sl-i );
-					sl -= j;
+					for( len = 1; utf8hnd( string[curs-len] ) == -1; len++ );
+					if( curs < len ) break;
+					memmove( &string[curs-len], &string[curs], sl-curs );
+					curs -= len; sl -= len;
 					string[sl] = 0;
+					updls( -len, cy( curs )+1 );
 					break;
+
+				case XK_Left: if( curs == 0 ) break;
+					for( len = 1; utf8hnd( string[curs-len] ) == -1; len++ );
+					if( curs >= len ) curs -= len;
+					break;
+				case XK_Right:
+					for( len = 0; utf8hnd( string[curs+len] ) == -1; len++ );
+					if( curs+len < sl ) curs += len+1;
+					break;
+				case XK_Up:
+					if( cy( curs ) > 0 ) cvm( True );
+					break;
+				case XK_Down:
+					if( cy( curs ) < ls[0]-2 ) cvm( False );
+					break;
+
+				case XK_Escape: return string;
 				}
 			}
-		}
 
-		// WARNING: the following section is as ugly as your mom last night
-		if( _lines > 0 ) {
-			if( curs[1] < view_up ) diwk_view_add( -1 );
-			if( curs[1] > view_up+lines-1 ) diwk_view_add( 1 );
-
-			dc->x = dc->y = 0; dc->w = dw; dc->h = lh*lines;
-			drawrect( dc, 0, 0, dw, lh*lines, True, BG( dc, bw ) );
-
-			dc->w = 0; dc->h = lh;
-
-			int k; for( i = j = k = 0; i < sl; i++ ) {
-				if( string[i] == '\n' ) {
-					if( k >= view_up && k <= view_up+lines ) {
-						char tmpstr[i-j+1];
-						memcpy( tmpstr, &string[j], i-j+1 );
-						tmpstr[i-j] = 0;
-						dc->w = textw( dc, tmpstr );
-						drawtext( dc, tmpstr, col );
-						dc->y += lh;
-					} k++;
-					j = i+1;
-				}
-			}
-			char tmpstr[i-j+1];
-			memcpy( tmpstr, &string[j], i-j+1 );
-			tmpstr[i-j] = 0;
-			dc->w = textw( dc, tmpstr );
-			drawtext( dc, tmpstr, col );
-
-			dc->x = dc->y = 0;
-			for( i = j = 0; tmpstr[i+j] != 0; i++ ) {
-				if( utf8hnd( tmpstr[i+j] ) != -1 ) i--;
-				else j++;
-				tmpstr[i] = ' ';
-			}
-			drawrect( dc, textnw( dc, tmpstr, curs[0]+1 ), (curs[1]-view_up)*lh, 1, lh, True, FG( dc, col ) );
-
-			mapdc( dc, win, dw, lh*lines );
+			draw( _lines );
 		}
 	}
 }
@@ -270,7 +215,7 @@ char *diwk_radio_button( const char **_str, int _n ) {
 			if( e.xkey.state & Mod1Mask ) {
 				switch( ks ) {
 				case XK_Escape:
-					return "\0";
+				return "\0";
 				}
 			}
 
@@ -301,10 +246,27 @@ char *diwk_radio_button( const char **_str, int _n ) {
 	}
 }
 
-void diwk_view_add( int _n ) {
-	view_up += _n;
-	if( view_up < 0 ) view_up -= _n;
-	else if( view_up+lines > diwk_last_row( ) ) view_up -= _n;
+void updls( int _len, int _start ) {
+	for( _start++; _start <= ls[0]; _start++ )
+		ls[_start] += _len;
+}
+
+int cx( int _curs ) {
+	int i, j;
+	for( i = j = 0; i < curs; i++ ) {
+		if( utf8hnd( string[i] ) != -1 ) j++;
+		if( string[i] == '\n' ) j = 0;
+//		if( utf8hnd( string[i] ) == -1 ) { j--; /*printf( "lol\n" );*/ } // LOLWAT?!
+//		else j++;
+	}
+//printf( "%i %i\n", j, curs );
+	return j;
+}
+int cy( int _curs ) {
+	int i, j;
+	for( i = j = 0; i < curs; i++ )
+		if( string[i] == '\n' ) j++;
+	return j;
 }
 
 char utf8hnd( unsigned char _c ) {
@@ -323,37 +285,4 @@ char utf8hnd( unsigned char _c ) {
 	else if( _c < 0xfc ) return 4;
 	else if( _c < 0xfe ) return 5;
 	else return -2;
-}
-
-int diwk_row_last_col( ) {
-	int i, j; for( i = j = 0; i < sl; i++ ) {
-		if( string[i] == '\n' ) j++;
-		if( j == curs[1] ) {
-			if( string[i] == '\n' ) i++;
-			break;
-		}
-	}
-	for( j = i; j < sl; j++ )
-		if( string[j+1] == '\n' ) { j++; break; }
-	return j-i;
-}
-
-int diwk_str_curs_pos( ) {
-	int i, j; for( i = j = 0; i < sl; i++ ) {
-		if( j == curs[1] ) break;
-		if( string[i] == '\n' ) j++;
-	}
-	return i+curs[0];
-}
-
-Bool diwk_is_last_row( ) {
-	int i; for( i = diwk_str_curs_pos( ); i < sl; i++ )
-		if( string[i] == '\n' ) return False;
-	return True;
-}
-
-int diwk_last_row( ) {
-	int i, j; for( i = j = 0; i < sl; i++ )
-		if( string[i] == '\n' ) j++;
-	return j+1;
 }
