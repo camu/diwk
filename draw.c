@@ -46,7 +46,7 @@ drawtextn(DC *dc, const char *text, size_t n, unsigned long col[ColLast]) {
 
 	XSetForeground(dc->dpy, dc->gc, FG(dc, col));
 	if(dc->font.set)
-		XmbDrawString(dc->dpy, dc->canvas, dc->font.set, dc->gc, x, y, text, n);
+		Xutf8DrawString(dc->dpy, dc->canvas, dc->font.set, dc->gc, x, y, text, n);
 	else {
 		XSetFont(dc->dpy, dc->gc, dc->font.xfont->fid);
 		XDrawString(dc->dpy, dc->canvas, dc->gc, x, y, text, n);

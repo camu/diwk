@@ -31,6 +31,8 @@ int sl;
 int curs;
 int view_top;
 
+void genls( int _ls0 );
+void moils( );
 void updls( int _len, int _start );
 int cx( int _curs );
 int cy( int _curs );

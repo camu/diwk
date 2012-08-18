@@ -24,7 +24,7 @@ void diwk_init( ) {
 	col[ColFG] = getcolor( dc, normfg );
 	bw[ColBG] = getcolor( dc, bwbg );
 	bw[ColFG] = getcolor( dc, bwfg );
-	initfont( dc, NULL );
+	initfont( dc, "-*-terminus-medium-r-*-*-12-*-*-*-*-*-*-*" );
 	lh = 18;
 	dw = DisplayWidth( dc->dpy, screen );
 	screen = DefaultScreen( dc->dpy );
@@ -41,7 +41,8 @@ void diwk_create_window( char _lines ) {
 	swa.override_redirect = True;
 	swa.background_pixel = getcolor( dc, "#ffffff" );
 	swa.event_mask = ExposureMask | VisibilityChangeMask | KeyPressMask;
-	win = XCreateWindow( dc->dpy, RootWindow( dc->dpy, screen ), 0, 0, dw, lh*_lines, 0, DefaultDepth( dc->dpy, screen ), CopyFromParent, DefaultVisual( dc->dpy, screen ), CWOverrideRedirect | CWBackPixel | CWEventMask, &swa );
+	win = XCreateWindow( dc->dpy, RootWindow( dc->dpy, screen ), 0, 0, dw, lh*_lines, 0, DefaultDepth( dc->dpy, screen ), CopyFromParent, DefaultVisual( dc->dpy, 
+screen ), CWOverrideRedirect | CWBackPixel | CWEventMask, &swa );
 	XMapRaised( dc->dpy, win );
 	resizedc( dc, dw, lh*_lines );
 
@@ -78,6 +79,7 @@ void draw( int _lines ) {
 			}
 		}
 	}
+
 	mapdc( dc, win, dw, lh*_lines );
 }
 
@@ -151,12 +153,20 @@ char *diwk_text_prompt( int _lines ) {
 					memcpy( &string[curs], buf, len );
 					sl += len; curs += len;
 					updls( len, cy( curs )+1 );
+					moils( );
 					string[sl] = 0;
 					break;
 
 				case XK_BackSpace:
 					for( len = 1; utf8hnd( string[curs-len] ) == -1; len++ );
 					if( curs < len ) break;
+
+					if( string[curs-len] == '\n' ) {
+						for( i = cy( curs )+1; i < ls[0]; i++ )
+							ls[i] = ls[i+1];
+						ls[0]--;
+					}
+
 					memmove( &string[curs-len], &string[curs], sl-curs );
 					curs -= len; sl -= len;
 					string[sl] = 0;
@@ -246,6 +256,16 @@ char *diwk_radio_button( const char **_str, int _n ) {
 	}
 }
 
+void moils( ) {
+	int i, j; for( i = 1; i < ls[0]; i++ ) {
+		if( ls[i] > ls[i+1] ) {
+			j = ls[i];
+			ls[i] = ls[i+1];
+			ls[i+1] = j;
+		}
+	}
+}
+
 void updls( int _len, int _start ) {
 	for( _start++; _start <= ls[0]; _start++ )
 		ls[_start] += _len;
@@ -256,10 +276,7 @@ int cx( int _curs ) {
 	for( i = j = 0; i < curs; i++ ) {
 		if( utf8hnd( string[i] ) != -1 ) j++;
 		if( string[i] == '\n' ) j = 0;
-//		if( utf8hnd( string[i] ) == -1 ) { j--; /*printf( "lol\n" );*/ } // LOLWAT?!
-//		else j++;
 	}
-//printf( "%i %i\n", j, curs );
 	return j;
 }
 int cy( int _curs ) {
@@ -286,3 +303,4 @@ char utf8hnd( unsigned char _c ) {
 	else if( _c < 0xfe ) return 5;
 	else return -2;
 }
+
