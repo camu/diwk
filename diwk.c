@@ -1,16 +1,25 @@
 // See LICENSE file for copyright and license details.
+
 #include "diwk.h"
 #include "config.h"
 
+#define USAGE "diwk -t [number of rows]\n\tThe default number of rows is 1. 0 means no echo.\ndiwk -r <option 1> [option 2] [...]\n"
+
 int main( int argc, char *argv[] ) {
+	if( argc == 1 || argv[1][0] != '-' || ( argv[1][1] != 't' && argv[1][1] != 'r' ) ) {
+		printf( "%s", USAGE );
+		return 0;
+	}
+
 	diwk_init( );
 
-	printf( "%s\n", diwk_text_prompt( 4 ) );
-
-//	printf( "%s\n", diwk_text_prompt( 0 ) );
-
-//	const char *herp[] = { "herp", "sherp", "derp" };
-//	printf( "%s\n", diwk_radio_button( herp, 3 ) );
+	if( argv[1][1] == 't' ) {
+		if( argc == 1 )
+			printf( "%s\n", diwk_text_prompt( 1 ) );
+		else
+			printf( "%s\n", diwk_text_prompt( atoi( argv[2] ) ) );
+	} else
+		printf( "%s\n", diwk_radio_button( argv+2, argc-2 ) );
 
 	diwk_clean( );
 
@@ -41,8 +50,7 @@ void diwk_create_window( char _lines ) {
 	swa.override_redirect = True;
 	swa.background_pixel = getcolor( dc, "#ffffff" );
 	swa.event_mask = ExposureMask | VisibilityChangeMask | KeyPressMask;
-	win = XCreateWindow( dc->dpy, RootWindow( dc->dpy, screen ), 0, 0, dw, lh*_lines, 0, DefaultDepth( dc->dpy, screen ), CopyFromParent, DefaultVisual( dc->dpy, 
-screen ), CWOverrideRedirect | CWBackPixel | CWEventMask, &swa );
+	win = XCreateWindow( dc->dpy, RootWindow( dc->dpy, screen ), 0, 0, dw, lh*_lines, 0, DefaultDepth( dc->dpy, screen ), CopyFromParent, DefaultVisual( dc->dpy, screen ), CWOverrideRedirect | CWBackPixel | CWEventMask, &swa );
 	XMapRaised( dc->dpy, win );
 	resizedc( dc, dw, lh*_lines );
 
@@ -100,6 +108,12 @@ void cvm( Bool _up ) {
 }
 
 char *diwk_text_prompt( int _lines ) {
+	char echo = 1;
+	if( _lines == 0 ) {
+		_lines = 1;
+		echo = 0;
+	}
+
 	diwk_create_window( _lines );
 	string = malloc( STRBUFLEN*BUFLEN+1 );
 	string[0] = 0;
@@ -192,12 +206,12 @@ char *diwk_text_prompt( int _lines ) {
 				}
 			}
 
-			draw( _lines );
+			if( echo ) draw( _lines );
 		}
 	}
 }
 
-char *diwk_radio_button( const char **_str, int _n ) {
+char *diwk_radio_button( char **_str, int _n ) {
 	diwk_create_window( _n );
 
 	char listcur = 0;

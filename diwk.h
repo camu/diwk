@@ -1,4 +1,8 @@
 // See LICENSE file for copyright and license details.
+
+#ifndef __DIWK_H
+#define __DIWK_H
+
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <unistd.h>
@@ -38,7 +42,7 @@ int cx( int _curs );
 int cy( int _curs );
 
 char *diwk_text_prompt( int _lines );
-char *diwk_radio_button( const char **_str, int _n );
+char *diwk_radio_button( char **_str, int _n );
 
 void diwk_init( );
 void diwk_clean( );
@@ -50,3 +54,6 @@ void erhnd( const char *_str ) {
 	printf( "%s\n", _str );
 	exit( EXIT_FAILURE );
 }
+
+#endif
+
